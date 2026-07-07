@@ -72,6 +72,7 @@ writePng(path.join(outDir, "favicon.png"), 64, 64, (canvas) => {
 });
 
 console.log(`Generated Expo assets in ${outDir}`);
+await import("./generate-card-deck.mjs");
 
 function createCanvas(width, height) {
   return {

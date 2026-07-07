@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +18,6 @@ import {
   type PlayerId,
   type RoundScore,
   type ScopaCount,
-  SUIT_META,
   chooseBotMove,
   createInitialDeal,
   dealNextHands,
@@ -26,8 +26,15 @@ import {
   removeCards,
   scoreRound
 } from "./src/game/scopa";
+import { CARD_BACK_IMAGE, CARD_IMAGES } from "./src/assets/cardImages";
 
 const MATCH_TARGET = 11;
+const SUIT_BADGES: Record<Card["suit"], string> = {
+  denari: "D",
+  coppe: "C",
+  spade: "S",
+  bastoni: "B"
+};
 
 type GameStatus = "playing" | "roundOver" | "matchOver";
 type ModalName = "rules" | "privacy" | "score" | null;
@@ -506,7 +513,7 @@ function DeckBacks({ count }: { count: number }) {
             }
           ]}
         >
-          <Text style={styles.cardBackMiniText}>SC</Text>
+          <Image source={CARD_BACK_IMAGE} style={styles.cardBackMiniImage} resizeMode="cover" />
         </View>
       ))}
     </View>
@@ -524,9 +531,7 @@ function GameCard({
   disabled?: boolean;
   onPress?: () => void;
 }) {
-  const meta = SUIT_META[card.suit];
-  const pipCount = card.rank <= 7 ? card.rank : 1;
-  const isFace = card.rank >= 8;
+  const cardImage = CARD_IMAGES[card.id];
 
   return (
     <Pressable
@@ -541,40 +546,18 @@ function GameCard({
         pressed ? styles.cardPressed : null
       ]}
     >
-      <View style={styles.cardTopRow}>
-        <Text style={[styles.cardRank, compact ? styles.cardRankCompact : null, { color: meta.color }]}>
-          {card.shortLabel}
+      {cardImage ? (
+        <Image source={cardImage} style={styles.cardImage} resizeMode="cover" />
+      ) : (
+        <View style={styles.cardImageFallback}>
+          <Text style={styles.cardImageFallbackText}>{formatCard(card)}</Text>
+        </View>
+      )}
+      <View style={[styles.cardIndexBadge, compact ? styles.cardIndexBadgeCompact : null]}>
+        <Text style={[styles.cardIndexText, compact ? styles.cardIndexTextCompact : null]}>
+          {card.shortLabel}{SUIT_BADGES[card.suit]}
         </Text>
-        <Text style={[styles.cardSuitSmall, { color: meta.color }]}>{meta.symbol}</Text>
       </View>
-      <View style={[styles.cardArt, compact ? styles.cardArtCompact : null]}>
-        {isFace ? (
-          <View style={[styles.faceBadge, { borderColor: meta.softColor }]}>
-            <Text style={[styles.faceSymbol, { color: meta.color }]}>{meta.symbol}</Text>
-            <Text style={[styles.faceText, { color: meta.color }]}>{card.shortLabel}</Text>
-          </View>
-        ) : (
-          <View style={styles.pipGrid}>
-            {Array.from({ length: pipCount }).map((_, index) => (
-              <Text
-                key={`${card.id}-pip-${index}`}
-                style={[
-                  styles.pip,
-                  compact ? styles.pipCompact : null,
-                  {
-                    color: meta.color
-                  }
-                ]}
-              >
-                {meta.symbol}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-      <Text style={[styles.cardSuitName, compact ? styles.cardSuitNameCompact : null]}>
-        {meta.label}
-      </Text>
     </Pressable>
   );
 }
@@ -815,18 +798,18 @@ const styles = StyleSheet.create({
   },
   cardBackMini: {
     alignItems: "center",
-    backgroundColor: "#8E2B3D",
-    borderColor: "#F6DFA8",
+    backgroundColor: "#5F1724",
+    borderColor: "rgba(255, 248, 234, 0.35)",
     borderRadius: 6,
-    borderWidth: 2,
-    height: 60,
+    borderWidth: 1,
+    height: 70,
     justifyContent: "center",
-    width: 42
+    overflow: "hidden",
+    width: 44
   },
-  cardBackMiniText: {
-    color: "#F6DFA8",
-    fontSize: 13,
-    fontWeight: "900"
+  cardBackMiniImage: {
+    height: "100%",
+    width: "100%"
   },
   tableZone: {
     flex: 1,
@@ -912,29 +895,69 @@ const styles = StyleSheet.create({
     marginTop: 12
   },
   card: {
-    backgroundColor: "#FFF8EA",
-    borderColor: "#D9B463",
+    backgroundColor: "#2A2119",
     borderRadius: 8,
-    borderWidth: 2,
-    height: 120,
-    justifyContent: "space-between",
-    padding: 8,
+    height: 150,
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.22,
     shadowRadius: 10,
-    width: 82
+    width: 90
   },
   cardCompact: {
-    height: 96,
-    padding: 7,
-    width: 66
+    height: 112,
+    width: 68
   },
   cardPressed: {
     transform: [{ translateY: -4 }]
   },
   cardDisabled: {
     opacity: 0.55
+  },
+  cardImage: {
+    height: "100%",
+    width: "100%"
+  },
+  cardImageFallback: {
+    alignItems: "center",
+    backgroundColor: "#FFF8EA",
+    flex: 1,
+    justifyContent: "center"
+  },
+  cardImageFallbackText: {
+    color: "#18251F",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  cardIndexBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 248, 234, 0.92)",
+    borderColor: "rgba(42, 34, 25, 0.32)",
+    borderRadius: 5,
+    borderWidth: 1,
+    left: 6,
+    minWidth: 28,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    position: "absolute",
+    top: 6
+  },
+  cardIndexBadgeCompact: {
+    borderRadius: 4,
+    left: 4,
+    minWidth: 22,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    top: 4
+  },
+  cardIndexText: {
+    color: "#2A2119",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  cardIndexTextCompact: {
+    fontSize: 10
   },
   cardTopRow: {
     alignItems: "center",
