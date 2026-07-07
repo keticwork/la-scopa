@@ -11,6 +11,7 @@ const expoCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 let activeChild;
 let attempt = 0;
 let selectedPort = requestedPort;
+let shuttingDown = false;
 
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
@@ -51,6 +52,10 @@ function startExpo() {
 
   activeChild.on("exit", (code, signal) => {
     activeChild = undefined;
+
+    if (shuttingDown) {
+      process.exit(0);
+    }
 
     if (signal === "SIGINT" || signal === "SIGTERM") {
       process.exit(0);
@@ -93,11 +98,25 @@ function isPortFree(port) {
 }
 
 process.on("SIGINT", () => {
-  activeChild?.kill("SIGINT");
+  shuttingDown = true;
+
+  if (activeChild) {
+    activeChild.kill("SIGINT");
+    return;
+  }
+
+  process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  activeChild?.kill("SIGTERM");
+  shuttingDown = true;
+
+  if (activeChild) {
+    activeChild.kill("SIGTERM");
+    return;
+  }
+
+  process.exit(0);
 });
 
 selectedPort = await findAvailablePort(requestedPort);
