@@ -119,6 +119,7 @@ export default function App() {
 
     return game.totals.human > game.totals.bot ? "Tu menes" : "Le bot mene";
   }, [game.totals.bot, game.totals.human]);
+  const turnHint = buildTurnHint(game);
 
   function handleHumanCardPress(card: Card) {
     if (game.status !== "playing" || game.turn !== "human" || game.pendingCapture) {
@@ -224,6 +225,7 @@ export default function App() {
 
         <View style={styles.messageBar}>
           <Text style={styles.messageText}>{game.message}</Text>
+          {turnHint ? <Text style={styles.messageHint}>{turnHint}</Text> : null}
         </View>
 
         {game.pendingCapture ? (
@@ -276,18 +278,10 @@ export default function App() {
 
         <InfoModal
           visible={activeModal === "rules"}
-          title="Regles V1"
+          title="Comment jouer"
           onClose={() => setActiveModal(null)}
         >
-          <InfoText>
-            Jeu local a deux joueurs avec un paquet italien de 40 cartes. A ton tour, joue une carte :
-            elle capture une carte de meme valeur si possible, sinon une combinaison dont la somme vaut
-            sa valeur.
-          </InfoText>
-          <InfoText>
-            Une scopa vaut 1 point quand tu vides la table, sauf sur le dernier coup. En fin de manche :
-            majorite de cartes, majorite de denari, settebello et primiera valent chacun 1 point.
-          </InfoText>
+          <RulesGuide />
         </InfoModal>
 
         <InfoModal
@@ -431,6 +425,46 @@ function nextPlayer(player: PlayerId): PlayerId {
 
 function formatCapture(option: CaptureOption): string {
   return option.cards.map(formatCard).join(" + ");
+}
+
+function buildTurnHint(game: GameState): string {
+  if (game.status !== "playing") {
+    return "";
+  }
+
+  if (game.pendingCapture) {
+    return "Plusieurs prises sont possibles : choisis le groupe de cartes a ramasser.";
+  }
+
+  if (game.turn === "bot") {
+    return "Le bot reflechit, puis ce sera a toi.";
+  }
+
+  const captureMoves = game.humanHand.flatMap((card) =>
+    findCaptureOptions(card, game.table).map((option) => ({
+      card,
+      option
+    }))
+  );
+
+  if (captureMoves.length === 0) {
+    return "Aucune capture disponible : touche une carte de ta main pour la poser sur la table.";
+  }
+
+  const bestMove = captureMoves
+    .sort(
+      (left, right) =>
+        Number(right.option.cards.length === game.table.length) -
+          Number(left.option.cards.length === game.table.length) ||
+        right.option.cards.length - left.option.cards.length
+    )[0];
+
+  if (!bestMove) {
+    return "";
+  }
+
+  const scopaHint = bestMove.option.cards.length === game.table.length ? " Cela viderait la table." : "";
+  return `Capture possible : joue ${formatCard(bestMove.card)} pour prendre ${formatCapture(bestMove.option)}.${scopaHint}`;
 }
 
 function buildEndCopy(game: GameState): string {
@@ -598,6 +632,104 @@ function CaptureChoicePanel({
   );
 }
 
+function RulesGuide() {
+  return (
+    <View style={styles.rulesGuide}>
+      <RuleSection title="But">
+        <RuleText>
+          Tu joues contre le bot. Le match se joue a 11 points. A chaque manche, le but est de
+          capturer les bonnes cartes : beaucoup de cartes, beaucoup de denari, le 7 de denari et
+          les meilleures cartes pour la primiera.
+        </RuleText>
+      </RuleSection>
+
+      <RuleSection title="Ton tour">
+        <RuleStep index="1" text="Regarde les cartes sur la table." />
+        <RuleStep index="2" text="Choisis une carte de ta main." />
+        <RuleStep index="3" text="Si elle peut capturer, l'app ramasse les cartes pour toi." />
+        <RuleStep index="4" text="Si elle ne peut rien capturer, elle est posee sur la table." />
+      </RuleSection>
+
+      <RuleSection title="Capturer">
+        <RuleText>
+          Une carte capture d'abord une carte de meme valeur. C'est prioritaire.
+        </RuleText>
+        <RuleExample title="Meme valeur" text="Tu joues un 5. S'il y a un 5 sur la table, tu prends ce 5." />
+        <RuleText>
+          S'il n'y a pas de meme valeur, ta carte peut capturer plusieurs cartes dont la somme
+          vaut sa valeur.
+        </RuleText>
+        <RuleExample title="Somme" text="Tu joues un 7. Tu peux prendre 1 + 6, ou 2 + 5, ou 3 + 4." />
+      </RuleSection>
+
+      <RuleSection title="Scopa">
+        <RuleText>
+          Si ta capture vide toute la table, tu fais scopa et tu marques 1 point. Exception : la
+          toute derniere capture de la manche ne donne pas de point scopa.
+        </RuleText>
+      </RuleSection>
+
+      <RuleSection title="Fin de manche">
+        <RuleText>On ajoute les points suivants :</RuleText>
+        <RuleStep index="+" text="1 point pour celui qui a capture le plus de cartes." />
+        <RuleStep index="+" text="1 point pour celui qui a le plus de denari." />
+        <RuleStep index="+" text="1 point pour le 7 de denari, le settebello." />
+        <RuleStep index="+" text="1 point pour la meilleure primiera." />
+        <RuleStep index="+" text="1 point par scopa faite pendant la manche." />
+      </RuleSection>
+
+      <RuleSection title="Primiera">
+        <RuleText>
+          La primiera compare la meilleure carte de chaque couleur. Les 7 sont les plus forts,
+          puis 6, As, 5, 4, 3, 2, puis les figures. En cas d'egalite sur cartes, denari ou
+          primiera, personne ne prend le point.
+        </RuleText>
+      </RuleSection>
+
+      <View style={styles.ruleTip}>
+        <Text style={styles.ruleTipTitle}>Astuce simple</Text>
+        <Text style={styles.ruleTipText}>
+          Priorite au 7 de denari, aux denari, et aux coups qui font scopa. Si tu es perdu,
+          regarde l'aide sous le message de jeu.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function RuleSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.ruleSection}>
+      <Text style={styles.ruleSectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function RuleText({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.ruleText}>{children}</Text>;
+}
+
+function RuleStep({ index, text }: { index: string; text: string }) {
+  return (
+    <View style={styles.ruleStep}>
+      <View style={styles.ruleStepBadge}>
+        <Text style={styles.ruleStepBadgeText}>{index}</Text>
+      </View>
+      <Text style={styles.ruleStepText}>{text}</Text>
+    </View>
+  );
+}
+
+function RuleExample({ title, text }: { title: string; text: string }) {
+  return (
+    <View style={styles.ruleExample}>
+      <Text style={styles.ruleExampleTitle}>{title}</Text>
+      <Text style={styles.ruleExampleText}>{text}</Text>
+    </View>
+  );
+}
+
 function InfoModal({
   visible,
   title,
@@ -619,7 +751,7 @@ function InfoModal({
               <Text style={styles.modalCloseText}>Fermer</Text>
             </Pressable>
           </View>
-          {children}
+          <ScrollView contentContainerStyle={styles.modalContent}>{children}</ScrollView>
         </View>
       </View>
     </Modal>
@@ -879,6 +1011,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 18
+  },
+  messageHint: {
+    borderTopColor: "rgba(24, 37, 31, 0.12)",
+    borderTopWidth: 1,
+    color: "#5B4D2F",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+    marginTop: 8,
+    paddingTop: 8
   },
   handZone: {
     backgroundColor: "#1B382D",
@@ -1143,6 +1285,7 @@ const styles = StyleSheet.create({
   modalPanel: {
     backgroundColor: "#FFF8EA",
     borderRadius: 8,
+    maxHeight: "86%",
     maxWidth: 520,
     padding: 16,
     width: "100%"
@@ -1171,12 +1314,104 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900"
   },
+  modalContent: {
+    paddingBottom: 4
+  },
   infoText: {
     color: "#526157",
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 21,
     marginBottom: 10
+  },
+  rulesGuide: {
+    gap: 10
+  },
+  ruleSection: {
+    backgroundColor: "#F4E9D4",
+    borderColor: "rgba(128, 98, 43, 0.18)",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12
+  },
+  ruleSectionTitle: {
+    color: "#18251F",
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 8
+  },
+  ruleText: {
+    color: "#526157",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+    marginBottom: 8
+  },
+  ruleStep: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 9,
+    marginBottom: 7
+  },
+  ruleStepBadge: {
+    alignItems: "center",
+    backgroundColor: "#18251F",
+    borderRadius: 6,
+    justifyContent: "center",
+    minHeight: 24,
+    minWidth: 24,
+    paddingHorizontal: 5
+  },
+  ruleStepBadgeText: {
+    color: "#FFF8EA",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  ruleStepText: {
+    color: "#526157",
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20
+  },
+  ruleExample: {
+    backgroundColor: "#FFF8EA",
+    borderLeftColor: "#B78116",
+    borderLeftWidth: 4,
+    borderRadius: 8,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  ruleExampleTitle: {
+    color: "#80622B",
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 2,
+    textTransform: "uppercase"
+  },
+  ruleExampleText: {
+    color: "#18251F",
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20
+  },
+  ruleTip: {
+    backgroundColor: "#18251F",
+    borderRadius: 8,
+    padding: 12
+  },
+  ruleTipTitle: {
+    color: "#E0C67D",
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 4
+  },
+  ruleTipText: {
+    color: "#FFF8EA",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20
   },
   scoreRows: {
     gap: 8
